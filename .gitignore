@@ -1,3 +1,4 @@
 *.idea
 *.jpeg
-output.txt
+*.txt
+*.exe
