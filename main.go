@@ -1,49 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 
-	vision "cloud.google.com/go/vision/apiv1"
+	"mtgStack/identify"
 )
-
-func CardTitle(imgName string) string {
-	ctx := context.Background()
-
-	client, err := vision.NewImageAnnotatorClient(ctx)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	imgPath := "img/" + imgName
-	file, err := os.Open(imgPath)
-	if err != nil {
-		log.Fatalf("Failed to read file: %v", err)
-	}
-	defer file.Close()
-
-	image, err := vision.NewImageFromReader(file)
-	if err != nil {
-		log.Fatalf("Failed to get image from reader: %v", err)
-	}
-
-	annotations, err := client.DetectTexts(ctx, image, nil, 10)
-	if err != nil {
-		log.Fatalf("Failed to get text from image API: %v", err)
-	}
-
-	if len(annotations) == 0 {
-		fmt.Println("No text found")
-	}
-
-	s := annotations[0].Description
-	s = strings.Split(s, "\n")[0]
-	return s
-}
 
 func main() {
 	entries, err := os.ReadDir("./img")
@@ -51,8 +14,25 @@ func main() {
 		log.Fatalf("Unable to read dir entries: %v", err)
 	}
 
+	var cards []string
+
 	for _, e := range entries {
-		cardName := CardTitle(e.Name())
-		fmt.Println(cardName)
+		cardName, err := identify.CardTitle("img/" + e.Name())
+		if err != nil {
+			fmt.Printf("main: unable to identify card title for img %s: %v", e.Name(), err)
+		}
+		cards = append(cards, cardName)
+	}
+
+	output, err := os.Create("output.txt")
+	if err != nil {
+		log.Fatalf("main: unable to create output file: %v", err)
+	}
+
+	for _, card := range cards {
+		_, err = output.WriteString(card + "\n")
+		if err != nil {
+			log.Printf("main: unable to write card %s to output file: %v", card, err)
+		}
 	}
 }
