@@ -5,35 +5,68 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 
 	"mtgStack/identify"
 )
 
-func main() {
-	entries, err := os.ReadDir("./img")
+func FetchCards(dir string) (map[string]int, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Fatalf("Unable to read dir entries: %v", err)
+		return nil, fmt.Errorf("unable to read dir entries: %v", err)
 	}
 
-	cards := make(map[string]int)
+	wg := sync.WaitGroup{}
+	wg.Add(len(entries))
+
+	cardChan := make(chan string, len(entries))
 
 	for _, e := range entries {
-		cardName, err := identify.CardTitle("img/" + e.Name())
-		if err != nil {
-			fmt.Printf("main: unable to identify card title for img %s: %v", e.Name(), err)
-		}
-		cards[cardName] = cards[cardName] + 1
+		go func(img os.DirEntry) {
+			defer wg.Done()
+			cardName, err := identify.CardTitle("img/" + img.Name())
+			if err != nil {
+				fmt.Printf("main: unable to identify card title for img %s: %v", img.Name(), err)
+			}
+			cardChan <- cardName
+		}(e)
 	}
 
-	output, err := os.Create("output.txt")
+	wg.Wait()
+	close(cardChan)
+
+	cards := make(map[string]int)
+	for card := range cardChan {
+		cards[card] = cards[card] + 1
+	}
+
+	return cards, nil
+}
+
+func RecordCards(outPath string, cards map[string]int) error {
+	output, err := os.Create(outPath)
 	if err != nil {
-		log.Fatalf("main: unable to create output file: %v", err)
+		return fmt.Errorf("main: unable to create output file: %v", err)
 	}
 
 	for card, count := range cards {
 		_, err = output.WriteString(strconv.Itoa(count) + " " + card + "\n")
 		if err != nil {
-			log.Printf("main: unable to write card %s to output file: %v", card, err)
+			return fmt.Errorf("main: unable to write card %s to output file: %v", card, err)
 		}
+	}
+
+	return nil
+}
+
+func main() {
+	cards, err := FetchCards("img")
+	if err != nil {
+		log.Fatalf("unable to fetch cards: %v", err)
+	}
+
+	err = RecordCards("output.txt", cards)
+	if err != nil {
+		log.Fatalf("unable to record cards: %v", err)
 	}
 }
