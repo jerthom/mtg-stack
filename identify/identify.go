@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -43,5 +46,34 @@ func CardTitle(imgPath string) (string, error) {
 
 	s := annotations[0].Description
 	s = strings.Split(s, "\n")[0]
+
+	debugPath := "debug/" + s
+	debug, err := os.Create(debugPath)
+	if err != nil {
+		log.Fatalf("failed to open debug file: %v", err)
+	}
+
+	_, err = debug.WriteString(annotations[0].Description)
+	if err != nil {
+		log.Fatalf("failed to write to debug file: %v", err)
+	}
+
 	return s, nil
+}
+
+func ValidCard(cardName string) bool {
+	baseUrl := "https://api.scryfall.com/cards/named"
+	v := url.Values{}
+	v.Set("exact", cardName)
+	query := baseUrl + "?" + v.Encode()
+	resp, err := http.Get(query)
+	if err != nil {
+		return false
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	return true
 }
